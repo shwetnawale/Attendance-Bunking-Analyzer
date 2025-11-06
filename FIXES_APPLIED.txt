@@ -1,0 +1,54 @@
+FIXES APPLIED - 2025-11-06
+===========================
+
+1. TEXT COLOR FIXES (dashboard.html)
+   - Changed subject name from white to dark (#1a1a2e) for better visibility on white cards
+   - Changed professor name to gray (#4a5568)
+   - Changed "Attend All" and projection text to dark (#2d3748)
+   - Progress bar text made white with better contrast
+
+2. SCRAPER IMPROVEMENTS (app.py)
+   - Improved subject name extraction logic
+   - Better parsing of card text structure:
+     * Line 0: Faculty code/name
+     * Line 1: Subject code (e.g., ACUHV201)
+     * Line 2: Subject short name (e.g., UH)
+     * Line 3: Percentage
+     * Line 4: Fraction
+   - Fixed "Unknown Subject" issue by not relying on clicking
+   - Added JavaScript click method to avoid element interception
+   - Better scroll-into-view logic with center alignment
+   - Fallback naming when subject code not found
+
+3. DATE-WISE ATTENDANCE
+   - Improved modal detection after clicking cards
+   - Better parsing of table rows with date and Present/Absent status
+   - Proper modal closing using ESC key or close button
+
+4. BUNKING BUDDY FEATURES
+   - Added missing /api/dashboard/simulate endpoint
+   - Proper calculation of attendance with bunk dates
+   - Color scheme:
+     * RED = Days selected to bunk
+     * GREEN checkmark = Safe days (attendance stays ≥75%)
+     * BLUE dot = Days with classes
+   - Real-time updates when selecting/unselecting days
+   - Calendar shows full year
+
+5. OVERALL ATTENDANCE
+   - Now calculates from sum of all subjects if not explicitly present in ERP data
+   - Proper percentage calculation
+
+HOW TO TEST:
+1. Run: python app.py
+2. Open: http://localhost:5000
+3. Enter ERP credentials and upload timetable
+4. Wait for processing
+5. Check dashboard - subject names should be visible and readable
+6. Click "Bunking Buddy" - calendar should work with red/green indicators
+7. Select days and see attendance projections update
+
+KNOWN LIMITATIONS:
+- Timetable processing is simplified (no actual parsing yet)
+- Bunking buddy uses average 4 classes per day estimate
+- Date-wise attendance depends on ERP modal structure
