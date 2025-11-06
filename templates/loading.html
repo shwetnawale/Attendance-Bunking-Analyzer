@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processing Your Data...</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='styles.css') }}" rel="stylesheet">
+    <style>
+        .step-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            transition: all 0.3s;
+            border-left: 4px solid rgba(255, 255, 255, 0.3);
+        }
+        .step-item.active {
+            background: rgba(102, 126, 234, 0.3);
+            border-left-color: #667eea;
+            animation: pulse 2s infinite;
+        }
+        .step-item.completed {
+            background: rgba(40, 167, 69, 0.3);
+            border-left-color: #28a745;
+        }
+        .step-icon {
+            font-size: 1.5rem;
+            margin-right: 1rem;
+            min-width: 30px;
+        }
+        .step-icon.spinning {
+            animation: spin 2s linear infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .detail-box {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1rem;
+            border-radius: 10px;
+            margin-top: 1.5rem;
+            text-align: center;
+        }
+        .detail-box h4 {
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+        .fun-fact {
+            background: rgba(255, 193, 7, 0.2);
+            padding: 1rem;
+            border-radius: 10px;
+            margin-top: 1.5rem;
+            border-left: 4px solid #ffc107;
+        }
+        .fun-fact h4 {
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-magic"></i> Analyzing Your Attendance</h1>
+            <p>Sit back and relax, we're doing the heavy lifting...</p>
+        </div>
+
+        <div class="glass-card">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressBar" style="width: 0%;">0%</div>
+            </div>
+            <p id="statusMessage" style="text-align: center; margin-top: 1rem; font-size: 1.2rem; font-weight: 600;">🚀 Starting up...</p>
+            
+            <!-- Detailed Steps -->
+            <div style="margin-top: 2rem;">
+                <div class="step-item" id="step1">
+                    <div class="step-icon"><i class="fas fa-sign-in-alt"></i></div>
+                    <div>
+                        <strong>Connecting to ERP</strong>
+                        <div style="font-size: 0.85rem; opacity: 0.8;">Logging into your portal securely</div>
+                    </div>
+                </div>
+                
+                <div class="step-item" id="step2">
+                    <div class="step-icon"><i class="fas fa-download"></i></div>
+                    <div>
+                        <strong>Fetching Attendance Data</strong>
+                        <div style="font-size: 0.85rem; opacity: 0.8;">Extracting your attendance records</div>
+                    </div>
+                </div>
+                
+                <div class="step-item" id="step3">
+                    <div class="step-icon"><i class="fas fa-robot"></i></div>
+                    <div>
+                        <strong>AI Processing Timetable</strong>
+                        <div style="font-size: 0.85rem; opacity: 0.8;">Gemini is analyzing your schedule</div>
+                    </div>
+                </div>
+                
+                <div class="step-item" id="step4">
+                    <div class="step-icon"><i class="fas fa-chart-line"></i></div>
+                    <div>
+                        <strong>Calculating Projections</strong>
+                        <div style="font-size: 0.85rem; opacity: 0.8;">Building your attendance dashboard</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Details Box -->
+            <div class="detail-box" id="detailBox">
+                <h4>⏳ Estimated Time</h4>
+                <p id="timeEstimate">Calculating...</p>
+                <div style="margin-top: 0.5rem; font-size: 0.9rem; opacity: 0.8;" id="subjectsFound"></div>
+            </div>
+
+            <!-- Fun Fact -->
+            <div class="fun-fact">
+                <h4>💡 Did you know?</h4>
+                <p id="funFact" style="margin: 0; font-size: 0.95rem;"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const session_id = '{{ session_id }}';
+        let startTime = Date.now();
+        let currentStep = 0;
+        
+        const funFacts = [
+            "Most students maintain 75% attendance to stay eligible for exams.",
+            "Strategic bunking can help you maintain balance between studies and rest!",
+            "AI can process your entire timetable in milliseconds!",
+            "This app uses Selenium to automate browser interactions with ERP.",
+            "Gemini AI can understand complex timetable formats automatically.",
+            "Smart attendance planning helps reduce last-minute stress.",
+            "Your attendance data is processed locally and stays private.",
+            "The liquid glass design uses CSS backdrop-filter for that frosted effect!"
+        ];
+        
+        // Show random fun fact
+        document.getElementById('funFact').textContent = funFacts[Math.floor(Math.random() * funFacts.length)];
+        
+        // Change fun fact every 8 seconds
+        setInterval(() => {
+            document.getElementById('funFact').textContent = funFacts[Math.floor(Math.random() * funFacts.length)];
+        }, 8000);
+        
+        function updateStepVisuals(progress) {
+            // Clear all active states
+            document.querySelectorAll('.step-item').forEach(item => {
+                item.classList.remove('active');
+                const icon = item.querySelector('.step-icon i');
+                icon.classList.remove('fa-spin', 'fa-check');
+            });
+            
+            // Update based on progress
+            if (progress >= 0 && progress < 40) {
+                document.getElementById('step1').classList.add('active');
+                document.querySelector('#step1 .step-icon i').classList.add('fa-spin');
+            } else if (progress >= 40 && progress < 65) {
+                document.getElementById('step1').classList.add('completed');
+                document.querySelector('#step1 .step-icon i').classList.remove('fa-sign-in-alt');
+                document.querySelector('#step1 .step-icon i').classList.add('fa-check');
+                document.getElementById('step2').classList.add('active');
+                document.querySelector('#step2 .step-icon i').classList.add('fa-spin');
+            } else if (progress >= 65 && progress < 85) {
+                document.getElementById('step1').classList.add('completed');
+                document.querySelector('#step1 .step-icon i').classList.remove('fa-sign-in-alt');
+                document.querySelector('#step1 .step-icon i').classList.add('fa-check');
+                document.getElementById('step2').classList.add('completed');
+                document.querySelector('#step2 .step-icon i').classList.remove('fa-download');
+                document.querySelector('#step2 .step-icon i').classList.add('fa-check');
+                document.getElementById('step3').classList.add('active');
+                document.querySelector('#step3 .step-icon i').classList.add('fa-spin');
+            } else if (progress >= 85) {
+                document.getElementById('step1').classList.add('completed');
+                document.querySelector('#step1 .step-icon i').classList.remove('fa-sign-in-alt');
+                document.querySelector('#step1 .step-icon i').classList.add('fa-check');
+                document.getElementById('step2').classList.add('completed');
+                document.querySelector('#step2 .step-icon i').classList.remove('fa-download');
+                document.querySelector('#step2 .step-icon i').classList.add('fa-check');
+                document.getElementById('step3').classList.add('completed');
+                document.querySelector('#step3 .step-icon i').classList.remove('fa-robot');
+                document.querySelector('#step3 .step-icon i').classList.add('fa-check');
+                document.getElementById('step4').classList.add('active');
+                document.querySelector('#step4 .step-icon i').classList.add('fa-spin');
+            }
+        }
+        
+        function updateTimeEstimate(progress) {
+            const elapsed = (Date.now() - startTime) / 1000;
+            if (progress > 5) {
+                const estimated = (elapsed / progress) * (100 - progress);
+                const seconds = Math.ceil(estimated);
+                if (seconds > 60) {
+                    document.getElementById('timeEstimate').textContent = `About ${Math.ceil(seconds / 60)} minute(s) remaining`;
+                } else {
+                    document.getElementById('timeEstimate').textContent = `About ${seconds} seconds remaining`;
+                }
+            } else {
+                document.getElementById('timeEstimate').textContent = 'Calculating...';
+            }
+        }
+        
+        function checkStatus() {
+            fetch(`/status/${session_id}`)
+                .then(response => response.json())
+                .then(data => {
+                    const progress = data.progress || 0;
+                    const message = data.message || 'Processing...';
+                    const status = data.status;
+                    
+                    document.getElementById('progressBar').style.width = progress + '%';
+                    document.getElementById('progressBar').textContent = progress + '%';
+                    document.getElementById('statusMessage').textContent = '🔄 ' + message;
+                    
+                    updateStepVisuals(progress);
+                    updateTimeEstimate(progress);
+                    
+                    // Show subjects found if available
+                    if (message.includes('subjects')) {
+                        const match = message.match(/(\d+)/);
+                        if (match) {
+                            document.getElementById('subjectsFound').textContent = `📚 ${match[0]} subjects detected`;
+                        }
+                    }
+                    
+                    if (status === 'completed') {
+                        document.getElementById('statusMessage').textContent = '✅ Complete! Redirecting...';
+                        document.getElementById('statusMessage').style.color = '#28a745';
+                        document.querySelectorAll('.step-item').forEach(item => {
+                            item.classList.add('completed');
+                        });
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    } else if (status === 'error') {
+                        document.getElementById('statusMessage').textContent = '❌ ' + message;
+                        document.getElementById('statusMessage').style.color = '#ff4444';
+                        document.getElementById('timeEstimate').textContent = 'Process failed';
+                    } else {
+                        setTimeout(checkStatus, 1000);  // Check every 1 second for faster updates
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    setTimeout(checkStatus, 3000);
+                });
+        }
+        
+        // Start checking status immediately
+        checkStatus();
+    </script>
+</body>
+</html>

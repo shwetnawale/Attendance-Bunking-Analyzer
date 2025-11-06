@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Analyzer - Smart Bunking Buddy</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='styles.css') }}" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1><i class="fas fa-graduation-cap"></i> Attendance Analyzer</h1>
+            <p>Smart attendance tracking with AI-powered bunking buddy</p>
+        </div>
+
+        <!-- Step 1: ERP Login -->
+        <div id="step1" class="glass-card">
+            <div class="glass-header">
+                <h2><i class="fas fa-sign-in-alt"></i> Step 1: ERP Login</h2>
+                <p>Enter your ERP credentials to fetch attendance data</p>
+            </div>
+            <div class="card-body">
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> ERP Username</label>
+                        <input type="text" id="username" class="glass-input" placeholder="your.email@university.edu.in" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-lock"></i> ERP Password</label>
+                        <input type="password" id="password" class="glass-input" placeholder="Enter your password" required>
+                    </div>
+                    <button type="submit" class="glass-btn glass-btn-primary">
+                        <i class="fas fa-arrow-right"></i> Continue
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Step 2: Timetable Upload (Hidden initially) -->
+        <div id="step2" class="glass-card" style="display: none;">
+            <div class="glass-header">
+                <h2><i class="fas fa-calendar-alt"></i> Step 2: Upload Timetable</h2>
+                <p>Upload your weekly timetable and enter batch details</p>
+            </div>
+            <div class="card-body">
+                <form id="timetableForm" enctype="multipart/form-data">
+                    <!-- Student Info -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Year</label>
+                            <select id="year" name="year" class="glass-input" required>
+                                <option value="">Select Year</option>
+                                <option value="FE">First Year</option>
+                                <option value="SE">Second Year</option>
+                                <option value="TE">Third Year</option>
+                                <option value="BE">Fourth Year</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Semester</label>
+                            <select id="semester" name="semester" class="glass-input" required>
+                                <option value="">Select</option>
+                                <option value="1">Sem 1</option>
+                                <option value="2">Sem 2</option>
+                                <option value="3">Sem 3</option>
+                                <option value="4">Sem 4</option>
+                                <option value="5">Sem 5</option>
+                                <option value="6">Sem 6</option>
+                                <option value="7">Sem 7</option>
+                                <option value="8">Sem 8</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Division</label>
+                            <select id="division" name="division" class="glass-input" required>
+                                <option value="">Select</option>
+                                <option value="A">Division A</option>
+                                <option value="B">Division B</option>
+                                <option value="C">Division C</option>
+                                <option value="D">Division D</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Batch</label>
+                            <select id="batch" name="batch" class="glass-input" required>
+                                <option value="">Select Division First</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Language Course (Optional)</label>
+                        <select id="language" name="language" class="glass-input">
+                            <option value="none">No Language Course</option>
+                            <option value="german">German</option>
+                            <option value="japanese">Japanese</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <!-- File Upload -->
+                    <div class="upload-area" id="uploadArea">
+                        <input type="file" id="timetable" name="timetable" accept=".xlsx,.xls,.csv" required style="display: none;">
+                        <div id="uploadPrompt">
+                            <i class="fas fa-cloud-upload-alt fa-3x"></i>
+                            <h3>Click to upload or drag and drop</h3>
+                            <p>Supports Excel (.xlsx, .xls) and CSV files</p>
+                        </div>
+                        <div id="fileInfo" style="display: none;">
+                            <i class="fas fa-file-excel fa-2x"></i>
+                            <p id="fileName"></p>
+                            <small id="fileSize"></small>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="glass-btn glass-btn-success btn-block">
+                        <i class="fas fa-rocket"></i> Start Analysis
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Features Section -->
+        <div class="features-grid">
+            <div class="feature-card glass-card">
+                <i class="fas fa-chart-line fa-2x"></i>
+                <h3>Real-time Analysis</h3>
+                <p>Track your attendance live with instant notifications</p>
+            </div>
+            <div class="feature-card glass-card">
+                <i class="fas fa-robot fa-2x"></i>
+                <h3>AI-Powered</h3>
+                <p>Gemini API processes your timetable intelligently</p>
+            </div>
+            <div class="feature-card glass-card">
+                <i class="fas fa-calendar-check fa-2x"></i>
+                <h3>Smart Planning</h3>
+                <p>Plan safe bunk days without risking attendance</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Division change handler - update batch options
+        document.getElementById('division').addEventListener('change', function() {
+            const division = this.value;
+            const batchSelect = document.getElementById('batch');
+            
+            // Clear existing options
+            batchSelect.innerHTML = '<option value="">Select</option>';
+            
+            if (division) {
+                // Add batch options based on division
+                for (let i = 1; i <= 3; i++) {
+                    const option = document.createElement('option');
+                    option.value = division + i;
+                    option.textContent = `Batch ${division}${i}`;
+                    batchSelect.appendChild(option);
+                }
+            }
+        });
+
+        // Step 1: Login Form
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Hide step 1, show step 2
+                    document.getElementById('step1').style.display = 'none';
+                    document.getElementById('step2').style.display = 'block';
+                    document.getElementById('step2').scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    alert(result.message || 'Login failed');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+
+        // Step 2: File Upload
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('timetable');
+        const uploadPrompt = document.getElementById('uploadPrompt');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                showFileInfo(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                showFileInfo(e.target.files[0]);
+            }
+        });
+
+        function showFileInfo(file) {
+            fileName.textContent = file.name;
+            fileSize.textContent = `Size: ${(file.size / 1024 / 1024).toFixed(2)} MB`;
+            uploadPrompt.style.display = 'none';
+            fileInfo.style.display = 'block';
+        }
+
+        // Step 2: Timetable Form Submit
+        document.getElementById('timetableForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            
+            try {
+                const response = await fetch('/upload-timetable', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Redirect to loading page
+                    window.location.href = `/dashboard/${result.session_id}`;
+                } else {
+                    alert(result.message || 'Upload failed');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html>

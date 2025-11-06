@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bunking Buddy - Plan Your Attendance</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='liquid-glass.css') }}?v=2" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-box {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            padding: 2rem;
+            text-align: center;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .stat-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        
+        .stat-box h2 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin: 0.5rem 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .stat-box.success { border-left: 5px solid #28a745; }
+        .stat-box.warning { border-left: 5px solid #ffc107; }
+        .stat-box.danger { border-left: 5px solid #dc3545; }
+        
+        .calendar-container {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            border-radius: 25px;
+            padding: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .month-selector {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+        }
+        
+        .month-selector h3 {
+            color: white;
+            margin: 0;
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+        
+        .month-nav-btn {
+            background: rgba(255, 255, 255, 0.3);
+            border: none;
+            color: white;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.3rem;
+            transition: all 0.2s;
+        }
+        
+        .month-nav-btn:hover {
+            background: rgba(255, 255, 255, 0.5);
+            transform: scale(1.1);
+        }
+        
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px;
+        }
+        
+        .calendar-day-header {
+            text-align: center;
+            color: white;
+            font-weight: 600;
+            padding: 0.75rem;
+            font-size: 0.9rem;
+        }
+        
+        .calendar-day {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid transparent;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+            font-weight: 600;
+            font-size: 1.1rem;
+            position: relative;
+        }
+        
+        .calendar-day:hover:not(.empty):not(.past) {
+            transform: scale(1.05);
+            background: rgba(255, 255, 255, 0.35);
+        }
+        
+        .calendar-day.empty {
+            background: transparent;
+            cursor: default;
+        }
+        
+        .calendar-day.past {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        
+        .calendar-day.attending {
+            background: linear-gradient(135deg, rgba(40, 167, 69, 0.7), rgba(32, 201, 151, 0.7));
+            border-color: #28a745;
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+        }
+        
+        .calendar-day.bunking {
+            background: linear-gradient(135deg, rgba(220, 53, 69, 0.7), rgba(255, 87, 87, 0.7));
+            border-color: #dc3545;
+            box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
+        }
+        
+        .calendar-day.has-classes::before {
+            content: '•';
+            position: absolute;
+            top: 5px;
+            right: 8px;
+            font-size: 1.5rem;
+            color: #667eea;
+        }
+        
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: white;
+            font-weight: 500;
+        }
+        
+        .legend-box {
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            border: 2px solid white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="text-center mb-4">
+            <h1 class="text-white mb-3" style="font-size: 3rem; font-weight: 700; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
+                <i class="fas fa-calendar-check me-3"></i>Bunking Buddy
+            </h1>
+            <p class="text-white" style="font-size: 1.2rem; opacity: 0.9;">
+                Select days to attend (green) or bunk (red) and see live attendance impact
+            </p>
+        </div>
+        
+        <div class="text-center mb-4">
+            <button onclick="history.back()" class="glass-btn glass-btn-primary me-3">
+                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+            </button>
+            <button onclick="clearAll()" class="glass-btn glass-btn-warning me-3">
+                <i class="fas fa-eraser me-2"></i>Clear All Selections
+            </button>
+            <button onclick="showSafeDays()" class="glass-btn glass-btn-success" id="safeDaysBtn">
+                <i class="fas fa-shield-alt me-2"></i>Find Safe Days
+            </button>
+        </div>
+        
+        <!-- Safe Days Panel (Hidden by default) -->
+        <div id="safeDaysPanel" style="display: none; margin-bottom: 2rem;">
+            <div style="background: rgba(40, 167, 69, 0.3); backdrop-filter: blur(15px); border: 2px solid #28a745; border-radius: 20px; padding: 2rem;">
+                <h4 style="color: white; margin-bottom: 1rem;">
+                    <i class="fas fa-shield-alt me-2"></i>Safe Bunking Days
+                </h4>
+                <div id="safeDaysContent" style="color: white; font-size: 1.1rem;"></div>
+                <button onclick="applySafeDays()" class="glass-btn glass-btn-success mt-3">
+                    <i class="fas fa-check me-2"></i>Apply These Days
+                </button>
+                <button onclick="closeSafeDays()" class="glass-btn glass-btn-warning mt-3 ms-2">
+                    <i class="fas fa-times me-2"></i>Close
+                </button>
+            </div>
+        </div>
+        
+        <!-- Warning Panel (for attendance below 75%) -->
+        <div id="warningPanel" style="display: none; margin-bottom: 2rem;">
+            <div style="background: rgba(220, 53, 69, 0.3); backdrop-filter: blur(15px); border: 2px solid #dc3545; border-radius: 20px; padding: 2rem; text-align: center;">
+                <i class="fas fa-exclamation-triangle fa-3x mb-3" style="color: #fff;"></i>
+                <h4 style="color: white; margin-bottom: 1rem;">Attendance Below 75%</h4>
+                <p style="color: white; font-size: 1.1rem; margin-bottom: 0;">
+                    Your current attendance is below 75%. You should focus on attending classes instead of bunking.
+                    <br>No safe days available.
+                </p>
+                <button onclick="closeWarning()" class="glass-btn glass-btn-warning mt-3">
+                    <i class="fas fa-times me-2"></i>Got It
+                </button>
+            </div>
+        </div>
+        
+        <!-- Stats Boxes -->
+        <div class="stats-row">
+            <div class="stat-box success" id="currentBox">
+                <i class="fas fa-clipboard-check fa-2x mb-2"></i>
+                <h2 id="currentPct">{{ dashboard_data.current_overall.percentage }}%</h2>
+                <h5 style="margin: 0; opacity: 0.9;">Current Attendance</h5>
+                <small id="currentFraction" style="opacity: 0.8;">
+                    {{ dashboard_data.current_overall.attended }} / {{ dashboard_data.current_overall.total }}
+                </small>
+            </div>
+            
+            <div class="stat-box" id="attendingBox">
+                <i class="fas fa-user-check fa-2x mb-2"></i>
+                <h2 id="attendingPct">{{ dashboard_data.current_overall.percentage }}%</h2>
+                <h5 style="margin: 0; opacity: 0.9;">If You Attend Selected</h5>
+                <small style="opacity: 0.7; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Attend green days only</small>
+                <small id="attendingFraction" style="opacity: 0.8;">
+                    {{ dashboard_data.current_overall.attended }} / {{ dashboard_data.current_overall.total }}
+                </small>
+            </div>
+            
+            <div class="stat-box" id="bunkingBox">
+                <i class="fas fa-ban fa-2x mb-2"></i>
+                <h2 id="bunkingPct">{{ dashboard_data.current_overall.percentage }}%</h2>
+                <h5 style="margin: 0; opacity: 0.9;">If You Bunk Selected</h5>
+                <small style="opacity: 0.7; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Bunk red days only</small>
+                <small id="bunkingFraction" style="opacity: 0.8;">
+                    {{ dashboard_data.current_overall.attended }} / {{ dashboard_data.current_overall.total }}
+                </small>
+            </div>
+        </div>
+        
+        <!-- Calendar -->
+        <div class="calendar-container">
+            <div class="month-selector">
+                <button class="month-nav-btn" onclick="previousMonth()">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <h3 id="monthTitle">November 2025</h3>
+                <button class="month-nav-btn" onclick="nextMonth()">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+            
+            <div class="calendar-grid" id="calendarGrid">
+                <!-- Calendar will be generated by JavaScript -->
+            </div>
+            
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-box" style="background: rgba(255,255,255,0.2);"></div>
+                    <span>Not Selected</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box" style="background: linear-gradient(135deg, rgba(40, 167, 69, 0.7), rgba(32, 201, 151, 0.7));"></div>
+                    <span>Attending (Green)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box" style="background: linear-gradient(135deg, rgba(220, 53, 69, 0.7), rgba(255, 87, 87, 0.7));"></div>
+                    <span>Bunking (Red)</span>
+                </div>
+                <div class="legend-item">
+                    <span style="font-size: 1.5rem; color: #667eea;">•</span>
+                    <span>Has Classes</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const dashboardData = {{ dashboard_data|tojson }};
+        const currentDate = new Date();
+        let currentMonth = currentDate.getMonth();
+        let currentYear = currentDate.getFullYear();
+        
+        // Track selections: { date: 'attending'|'bunking'|null }
+        const selections = {};
+        
+        // Average classes per day (estimate - should be from timetable)
+        const AVG_CLASSES_PER_DAY = 4;
+        
+        function renderCalendar() {
+            const grid = document.getElementById('calendarGrid');
+            grid.innerHTML = '';
+            
+            // Update month title
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                               'July', 'August', 'September', 'October', 'November', 'December'];
+            document.getElementById('monthTitle').textContent = `${monthNames[currentMonth]} ${currentYear}`;
+            
+            // Add day headers
+            ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(day => {
+                const header = document.createElement('div');
+                header.className = 'calendar-day-header';
+                header.textContent = day;
+                grid.appendChild(header);
+            });
+            
+            // Get first day and total days
+            const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+            const lastDate = new Date(currentYear, currentMonth + 1, 0).getDate();
+            
+            // Empty cells before month starts
+            for (let i = 0; i < firstDay; i++) {
+                const empty = document.createElement('div');
+                empty.className = 'calendar-day empty';
+                grid.appendChild(empty);
+            }
+            
+            // Actual days
+            for (let day = 1; day <= lastDate; day++) {
+                const date = new Date(currentYear, currentMonth, day);
+                const dateStr = date.toISOString().split('T')[0];
+                const isPast = date < currentDate;
+                const dayOfWeek = date.getDay();
+                const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                
+                const dayDiv = document.createElement('div');
+                dayDiv.className = 'calendar-day';
+                dayDiv.textContent = day;
+                dayDiv.dataset.date = dateStr;
+                
+                if (isPast) {
+                    dayDiv.classList.add('past');
+                } else {
+                    // Add has-classes indicator (assume weekdays have classes)
+                    if (!isWeekend) {
+                        dayDiv.classList.add('has-classes');
+                    }
+                    
+                    // Apply selection
+                    if (selections[dateStr] === 'attending') {
+                        dayDiv.classList.add('attending');
+                    } else if (selections[dateStr] === 'bunking') {
+                        dayDiv.classList.add('bunking');
+                    }
+                    
+                    dayDiv.onclick = () => toggleDay(dateStr, dayDiv);
+                }
+                
+                grid.appendChild(dayDiv);
+            }
+            
+            updateStats();
+        }
+        
+        function toggleDay(dateStr, element) {
+            const current = selections[dateStr];
+            
+            // Cycle: null -> attending -> bunking -> null
+            if (!current) {
+                selections[dateStr] = 'attending';
+                element.classList.add('attending');
+                element.classList.remove('bunking');
+            } else if (current === 'attending') {
+                selections[dateStr] = 'bunking';
+                element.classList.add('bunking');
+                element.classList.remove('attending');
+            } else {
+                delete selections[dateStr];
+                element.classList.remove('bunking', 'attending');
+            }
+            
+            updateStats();
+        }
+        
+        function updateStats() {
+            const current = dashboardData.current_overall;
+            let attendingCount = 0;
+            let bunkingCount = 0;
+            
+            Object.values(selections).forEach(type => {
+                if (type === 'attending') attendingCount++;
+                else if (type === 'bunking') bunkingCount++;
+            });
+            
+            // Calculate new stats
+            const attendingClasses = attendingCount * AVG_CLASSES_PER_DAY;
+            const bunkingClasses = bunkingCount * AVG_CLASSES_PER_DAY;
+            
+            // Box 2: "If You Attend Selected" = Only consider GREEN days
+            // Attended = Current + Green days classes
+            // Total = Current + Green days classes
+            const newAttendedIfAttend = current.attended + attendingClasses;
+            const newTotalIfAttend = current.total + attendingClasses;
+            const pctIfAttend = newTotalIfAttend > current.total ? 
+                ((newAttendedIfAttend / newTotalIfAttend) * 100).toFixed(2) : current.percentage;
+            
+            // Box 3: "If You Bunk Selected" = Only consider RED days
+            // Attended = Current (don't attend red days)
+            // Total = Current + Red days classes
+            const newAttendedIfBunk = current.attended;  // Don't attend red days
+            const newTotalIfBunk = current.total + bunkingClasses; // Only red days add to total
+            const pctIfBunk = newTotalIfBunk > current.total ?
+                ((newAttendedIfBunk / newTotalIfBunk) * 100).toFixed(2) : current.percentage;
+            
+            // Update attending box
+            document.getElementById('attendingPct').textContent = pctIfAttend + '%';
+            document.getElementById('attendingFraction').textContent = 
+                `${newAttendedIfAttend} / ${newTotalIfAttend}`;
+            
+            const attendingBox = document.getElementById('attendingBox');
+            attendingBox.classList.remove('success', 'warning', 'danger');
+            if (pctIfAttend >= 75) attendingBox.classList.add('success');
+            else if (pctIfAttend >= 65) attendingBox.classList.add('warning');
+            else attendingBox.classList.add('danger');
+            
+            // Update bunking box
+            document.getElementById('bunkingPct').textContent = pctIfBunk + '%';
+            document.getElementById('bunkingFraction').textContent = 
+                `${newAttendedIfBunk} / ${newTotalIfBunk}`;
+            
+            const bunkingBox = document.getElementById('bunkingBox');
+            bunkingBox.classList.remove('success', 'warning', 'danger');
+            if (pctIfBunk >= 75) bunkingBox.classList.add('success');
+            else if (pctIfBunk >= 65) bunkingBox.classList.add('warning');
+            else bunkingBox.classList.add('danger');
+        }
+        
+        function previousMonth() {
+            currentMonth--;
+            if (currentMonth < 0) {
+                currentMonth = 11;
+                currentYear--;
+            }
+            renderCalendar();
+        }
+        
+        function nextMonth() {
+            currentMonth++;
+            if (currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+            }
+            renderCalendar();
+        }
+        
+        function clearAll() {
+            Object.keys(selections).forEach(key => delete selections[key]);
+            renderCalendar();
+        }
+        
+        // Safe days calculator
+        let safeDaysRecommendation = [];
+        
+        function showSafeDays() {
+            const current = dashboardData.current_overall;
+            
+            // Check if attendance is below 75%
+            if (current.percentage < 75) {
+                document.getElementById('warningPanel').style.display = 'block';
+                document.getElementById('safeDaysPanel').style.display = 'none';
+                return;
+            }
+            
+            // Calculate safe days
+            safeDaysRecommendation = calculateSafeDays();
+            
+            if (safeDaysRecommendation.length === 0) {
+                document.getElementById('safeDaysContent').innerHTML = `
+                    <p style="margin: 0;">⚠️ You cannot safely bunk any days without dropping below 75%.</p>
+                    <p style="margin-top: 0.5rem; opacity: 0.8; font-size: 0.95rem;">Current: ${current.percentage}% - Any bunking will drop you below the minimum.</p>
+                `;
+            } else {
+                const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                const datesByDay = {};
+                
+                // Group by day of week
+                safeDaysRecommendation.forEach(dateStr => {
+                    const date = new Date(dateStr);
+                    const dayName = dayNames[date.getDay()];
+                    if (!datesByDay[dayName]) datesByDay[dayName] = [];
+                    datesByDay[dayName].push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+                });
+                
+                let html = `
+                    <p style="margin-bottom: 1rem; font-weight: 600;">✅ You can safely bunk <strong>${safeDaysRecommendation.length} days</strong> and still stay above 75%!</p>
+                    <div style="background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 10px; margin-bottom: 1rem;">
+                `;
+                
+                // Show by day of week
+                Object.keys(datesByDay).forEach(day => {
+                    html += `<p style="margin: 0.5rem 0;"><strong>${day}:</strong> ${datesByDay[day].join(', ')}</p>`;
+                });
+                
+                html += `</div>`;
+                html += `<p style="opacity: 0.8; font-size: 0.95rem; margin: 0;">If you bunk these ${safeDaysRecommendation.length} days, your attendance will be approximately <strong>${calculateSafePercentage()}%</strong></p>`;
+                
+                document.getElementById('safeDaysContent').innerHTML = html;
+            }
+            
+            document.getElementById('safeDaysPanel').style.display = 'block';
+            document.getElementById('warningPanel').style.display = 'none';
+        }
+        
+        function calculateSafeDays() {
+            const current = dashboardData.current_overall;
+            const safeDays = [];
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            // Look ahead 30 days
+            for (let i = 0; i < 30; i++) {
+                const checkDate = new Date(today);
+                checkDate.setDate(today.getDate() + i);
+                const dateStr = checkDate.toISOString().split('T')[0];
+                const dayOfWeek = checkDate.getDay();
+                
+                // Skip weekends
+                if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+                
+                // Calculate what would happen if we bunk this day
+                const classesOnDay = AVG_CLASSES_PER_DAY;
+                const newTotal = current.total + classesOnDay;
+                const newAttended = current.attended; // Not attending this day
+                const newPercentage = (newAttended / newTotal) * 100;
+                
+                // If still above 75%, it's safe
+                if (newPercentage >= 75) {
+                    safeDays.push(dateStr);
+                }
+            }
+            
+            return safeDays;
+        }
+        
+        function calculateSafePercentage() {
+            const current = dashboardData.current_overall;
+            const totalBunkedClasses = safeDaysRecommendation.length * AVG_CLASSES_PER_DAY;
+            const newTotal = current.total + totalBunkedClasses;
+            const newPercentage = ((current.attended / newTotal) * 100).toFixed(2);
+            return newPercentage;
+        }
+        
+        function applySafeDays() {
+            // Clear all current selections
+            Object.keys(selections).forEach(key => delete selections[key]);
+            
+            // Apply safe days as bunking
+            safeDaysRecommendation.forEach(dateStr => {
+                selections[dateStr] = 'bunking';
+            });
+            
+            // Re-render calendar
+            renderCalendar();
+            
+            // Close panel
+            closeSafeDays();
+            
+            // Scroll to calendar
+            document.querySelector('.calendar-container').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function closeSafeDays() {
+            document.getElementById('safeDaysPanel').style.display = 'none';
+        }
+        
+        function closeWarning() {
+            document.getElementById('warningPanel').style.display = 'none';
+        }
+        
+        // Initialize
+        renderCalendar();
+    </script>
+</body>
+</html>

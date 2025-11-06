@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Dashboard - Attendance Analyzer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='liquid-glass.css') }}" rel="stylesheet">
+    <style>
+        .container {
+            max-width: 1400px;
+            padding: 2rem;
+        }
+        
+        .dashboard-header {
+            margin-bottom: 2rem;
+        }
+        
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .subject-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .attendance-detail {
+            display: none;
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        
+        .date-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            margin: 3px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .date-badge.present {
+            background: linear-gradient(135deg, rgba(40, 167, 69, 0.6), rgba(32, 201, 151, 0.6));
+        }
+        
+        .date-badge.absent {
+            background: linear-gradient(135deg, rgba(220, 53, 69, 0.6), rgba(255, 87, 87, 0.6));
+        }
+        
+        .notification-panel {
+            margin-bottom: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container glass-container">
+        <!-- Header -->
+        <div class="dashboard-header text-center animate-fade-in">
+            <h1 class="text-white text-shadow mb-3">
+                <i class="fas fa-chart-line me-3"></i>Attendance Dashboard
+            </h1>
+            <p class="text-white" style="font-size: 1.1rem; opacity: 0.9;">
+                Track your attendance, get insights, and plan your schedule
+            </p>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="text-center mb-4 animate-slide-up">
+            <a href="{{ url_for('index') }}" class="glass-btn glass-btn-primary me-3">
+                <i class="fas fa-home me-2"></i>Home
+            </a>
+            <a href="#" onclick="openBunkingBuddy()" class="glass-btn glass-btn-warning me-3">
+                <i class="fas fa-calendar-alt me-2"></i>Bunking Buddy
+            </a>
+            <button onclick="exportDashboard()" class="glass-btn glass-btn-success">
+                <i class="fas fa-download me-2"></i>Export Report
+            </button>
+        </div>
+
+        <!-- Notifications/Alerts -->
+        {% if dashboard_data.alerts %}
+        <div class="notification-panel animate-slide-up">
+            <h4 class="text-white text-shadow mb-3"><i class="fas fa-bell me-2"></i>Notifications</h4>
+            {% for alert in dashboard_data.alerts %}
+            <div class="glass-alert glass-alert-warning mb-3">
+                <i class="fas fa-exclamation-triangle me-2"></i>{{ alert }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Overall Stats -->
+        <div class="stat-grid animate-slide-up">
+            <!-- Current Attendance -->
+            <div class="stat-card">
+                <i class="fas fa-clipboard-check fa-3x mb-3" style="opacity: 0.8;"></i>
+                <h2>{{ dashboard_data.current_overall.percentage }}%</h2>
+                <p>Current Attendance</p>
+                <small style="opacity: 0.8;">{{ dashboard_data.current_overall.attended }} / {{ dashboard_data.current_overall.total }} classes</small>
+            </div>
+
+            <!-- Projected (Attend All) -->
+            <div class="stat-card">
+                <i class="fas fa-arrow-trend-up fa-3x mb-3" style="opacity: 0.8;"></i>
+                <h2>{{ dashboard_data.projected_normal.percentage }}%</h2>
+                <p>If You Attend All</p>
+                <small style="opacity: 0.8;">{{ dashboard_data.projected_normal.attended }} / {{ dashboard_data.projected_normal.total }} classes</small>
+            </div>
+
+            <!-- Projected (With Bunks) -->
+            {% if dashboard_data.bunk_dates %}
+            <div class="stat-card">
+                <i class="fas fa-calendar-times fa-3x mb-3" style="opacity: 0.8;"></i>
+                <h2>{{ dashboard_data.projected_selected.percentage }}%</h2>
+                <p>With Your Bunks</p>
+                <small style="opacity: 0.8;">{{ dashboard_data.projected_selected.attended }} / {{ dashboard_data.projected_selected.total }} classes</small>
+            </div>
+            {% endif %}
+
+            <!-- Safe Bunk Days -->
+            <div class="stat-card">
+                <i class="fas fa-shield-alt fa-3x mb-3" style="opacity: 0.8;"></i>
+                <h2>{{ dashboard_data.safe_bunk_days|length }}</h2>
+                <p>Safe Bunk Days</p>
+                <small style="opacity: 0.8;">Days you can bunk safely</small>
+            </div>
+        </div>
+
+        <!-- Subject-wise Attendance -->
+        <div class="glass-card-solid animate-slide-up">
+            <h3 class="mb-4"><i class="fas fa-book me-2"></i>Subject-wise Attendance</h3>
+            
+            <div class="subject-grid">
+                {% for subject in dashboard_data.subjects %}
+                <div class="subject-card" onclick="toggleSubjectDetails('subject-{{ loop.index }}')">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="mb-1" style="color: #1a1a2e; font-weight: 600;">{{ subject.display_name }}</h5>
+                            {% if subject.professor %}
+                            <small style="color: #4a5568;"><i class="fas fa-user me-1"></i>{{ subject.professor }}</small>
+                            {% endif %}
+                        </div>
+                        <span class="glass-badge {% if subject.current.percentage >= 75 %}glass-badge-success{% elif subject.current.percentage >= 65 %}glass-badge-warning{% else %}glass-badge-danger{% endif %}">
+                            {{ subject.current.percentage }}%
+                        </span>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="glass-progress mb-3">
+                        <div class="glass-progress-bar" style="width: {{ subject.current.percentage }}%; color: #fff; font-weight: 500;">
+                            {{ subject.current.attended }} / {{ subject.current.total }}
+                        </div>
+                    </div>
+
+                    <!-- Projections -->
+                    <div class="d-flex justify-content-between" style="font-size: 0.85rem; color: #2d3748;">
+                        <div>
+                            <i class="fas fa-arrow-up me-1"></i>
+                            Attend All: <strong>{{ subject.normal.percentage }}%</strong>
+                        </div>
+                        {% if subject.future_classes > 0 %}
+                        <div>
+                            <i class="fas fa-calendar me-1"></i>
+                            Upcoming: <strong>{{ subject.future_classes }}</strong>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Expandable Details (Hidden by default) -->
+                    <div id="subject-{{ loop.index }}" class="attendance-detail">
+                        <h6 class="mb-2" style="color: #fff; font-weight: 600;">📅 Date-wise Attendance</h6>
+                        {% if subject.date_wise and subject.date_wise|length > 0 %}
+                            <div style="max-height: 200px; overflow-y: auto;">
+                                {% for entry in subject.date_wise %}
+                                <div style="padding: 0.5rem; margin: 0.3rem 0; background: rgba(255,255,255,0.1); border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-size: 0.85rem; color: #fff; font-weight: 500;">📆 {{ entry.date }}</span>
+                                    <span class="glass-badge {% if entry.status == 'Present' %}glass-badge-success{% else %}glass-badge-danger{% endif %}" style="font-size: 0.75rem;">
+                                        {{ entry.status }}
+                                    </span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="mb-1" style="font-size: 0.85rem; color: #fff; opacity: 0.8;">
+                                📋 No detailed attendance records available
+                            </p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Upcoming Classes Calendar -->
+        <div class="glass-card mt-4 animate-slide-up">
+            <h3 class="text-white text-shadow mb-4"><i class="fas fa-calendar-week me-2"></i>Upcoming Classes (Next 7 Days)</h3>
+            
+            {% if dashboard_data.calendar and dashboard_data.calendar|length > 0 %}
+            <div class="row">
+                {% for day in dashboard_data.calendar[:7] %}
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="glass-card">
+                        <h5 class="text-white mb-2">
+                            <i class="fas fa-calendar-day me-2"></i>{{ day.display_date }}
+                        </h5>
+                        <p class="text-white mb-3" style="opacity: 0.8; font-size: 0.9rem;">
+                            {{ day.weekday }}
+                        </p>
+                        
+                        {% if day.classes %}
+                        <div class="mb-2">
+                            <strong class="text-white">Classes:</strong>
+                            <div class="mt-2">
+                                {% for cls in day.classes %}
+                                <div class="date-badge {% if cls.recognized %}present{% endif %}">
+                                    {{ cls.label }}
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% else %}
+                        <p class="text-white" style="opacity: 0.6;">
+                            <i class="fas fa-calendar-times me-1"></i>No classes scheduled
+                        </p>
+                        {% endif %}
+                        
+                        {% if day.recognized_total > 0 %}
+                        <div class="mt-3 pt-3" style="border-top: 1px solid rgba(255,255,255,0.2);">
+                            <small class="text-white" style="opacity: 0.8;">
+                                <i class="fas fa-info-circle me-1"></i>
+                                {{ day.recognized_total }} recognized classes
+                            </small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="glass-alert glass-alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>Timetable Not Available</strong>
+                <p class="mb-0 mt-2" style="opacity: 0.9;">
+                    Upload your timetable file to see upcoming classes and use advanced features like Bunking Buddy.
+                </p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- AI Insights (if available) -->
+        {% if dashboard_data.insights %}
+        <div class="glass-alert glass-alert-info mt-4 animate-fade-in">
+            <h5 class="text-white mb-2"><i class="fas fa-lightbulb me-2"></i>AI Insights</h5>
+            <p class="text-white mb-0">{{ dashboard_data.insights }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Toggle subject details
+        function toggleSubjectDetails(id) {
+            const element = document.getElementById(id);
+            if (element.style.display === 'none' || element.style.display === '') {
+                element.style.display = 'block';
+            } else {
+                element.style.display = 'none';
+            }
+        }
+
+        // Open Bunking Buddy
+        function openBunkingBuddy() {
+            const sessionId = '{{ session_id }}';
+            window.location.href = `/bunking-buddy/${sessionId}`;
+        }
+
+        // Export Dashboard
+        function exportDashboard() {
+            const scheduleFile = '{{ dashboard_data.schedule_file }}';
+            const bunkDates = {{ dashboard_data.bunk_dates|tojson }};
+            const horizonDays = {{ dashboard_data.horizon_days }};
+            
+            fetch(`/dashboard/${scheduleFile}/export`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    bunk_dates: bunkDates,
+                    horizon_days: horizonDays
+                })
+            })
+            .then(response => response.blob())
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `attendance_report_${new Date().toISOString().split('T')[0]}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+            })
+            .catch(error => {
+                alert('Error exporting dashboard: ' + error);
+            });
+        }
+
+        // Add animation delays to cards
+        document.addEventListener('DOMContentLoaded', function() {
+            const cards = document.querySelectorAll('.subject-card');
+            cards.forEach((card, index) => {
+                card.style.animationDelay = `${index * 0.1}s`;
+                card.classList.add('animate-slide-up');
+            });
+        });
+    </script>
+</body>
+</html>

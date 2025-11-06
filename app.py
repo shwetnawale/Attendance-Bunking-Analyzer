@@ -12,6 +12,7 @@ try:
     from selenium import webdriver
     from selenium.webdriver.common.by import By
     from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
     SELENIUM_AVAILABLE = True
 except ImportError:
     SELENIUM_AVAILABLE = False
@@ -93,13 +94,16 @@ def scrape_erp_attendance(username, password, session_id):
             processing_status[session_id] = {'status': 'error', 'message': 'Selenium not installed'}
             return
         
-        # Setup Chrome
+        # Setup Chrome with explicit driver path
         options = Options()
         options.add_argument("--headless")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         
-        driver = webdriver.Chrome(options=options)
+        # Set ChromeDriver path
+        chromedriver_path = os.path.join(os.getcwd(), 'chromedriver', 'win64', '142.0.7444.61', 'chromedriver.exe')
+        service = Service(executable_path=chromedriver_path)
+        driver = webdriver.Chrome(service=service, options=options)
         
         # Login to ERP
         processing_status[session_id]['progress'] = 20
@@ -181,110 +185,96 @@ def scrape_erp_attendance(username, password, session_id):
                 if len(lines) < 4:
                     continue
                 
-                # Find percentage (has % symbol)
-                percentage_idx = -1
-                for i, line in enumerate(lines):
-                    if '%' in line:
+                # Find percentage line
+                percentage_text = None
+                percentage_value = None
+                for line in lines:
+                    if '%' in line and line.replace('%', '').replace('.', '').replace('-', '').isdigit():
+                        percentage_text = line
                         try:
                             percentage_value = float(line.replace('%', '').strip())
-                            percentage_idx = i
                             break
                         except:
                             continue
                 
-                # Find fraction (format: "number / number")
-                fraction_idx = -1
-                for i, line in enumerate(lines):
-                    if ' / ' in line and line != lines[0]:  # Skip professor line
-                        parts = line.split(' / ')
-                        if len(parts) == 2:
+                # Find fraction line (attended/total)
+                fraction_line = None
+                for line in lines:
+                    if '/' in line and len(line.split('/')) == 2:
+                        parts = line.split('/')
+                        if parts[0].strip().isdigit() and parts[1].strip().isdigit():
+                            fraction_line = line
                             try:
                                 attended = int(parts[0].strip())
                                 total_classes = int(parts[1].strip())
-                                fraction_idx = i
                                 break
                             except:
                                 continue
                 
-                if percentage_value is None or fraction_idx == -1:
+                if percentage_value is None or fraction_line is None:
                     continue
                 
-                # Extract subject info from lines between professor and percentage
-                # Look for: Subject Code (has letters+numbers), then Subject Name (short)
-                potential_codes = []
-                potential_names = []
+                # Find subject code and full name
+                subject_code = None
+                subject_full_name = None
                 
-                for i in range(1, min(percentage_idx, len(lines))):
-                    line = lines[i]
-                    
-                    # Skip fraction, percentage, and professor lines
-                    if (' / ' in line and i == fraction_idx) or '%' in line or i == 0:
-                        continue
-                    
-                    # Subject code: Mix of letters and numbers (e.g., ACUHV201, MOOCDS301, UBTDS201)
-                    if any(c.isalpha() for c in line) and any(c.isdigit() for c in line) and len(line) >= 4:
-                        potential_codes.append(line)
-                    # Subject name: Short, mostly letters, 2-4 chars (e.g., UH, DSA, PP)
-                    elif len(line) >= 2 and len(line) <= 6 and line.isalpha():
-                        potential_names.append(line)
+                # Look for subject code (long code like UBTDS201, MOOCDS302)
+                for j, line in enumerate(lines):
+                    if (line != percentage_text and line != fraction_line and 
+                        line != lines[0] and len(line) > 5 and len(line) < 20 and
+                        not line.lower() in ['theory', 'practical', 'tutorial'] and
+                        line.isupper() and any(char.isdigit() for char in line)):
+                        subject_code = line
+                        
+                        # Look for the actual subject name in the next few lines
+                        for k in range(j + 1, min(j + 4, len(lines))):
+                            if k < len(lines):
+                                candidate = lines[k]
+                                if (candidate != percentage_text and candidate != fraction_line and 
+                                    candidate != lines[0] and len(candidate) > 1 and len(candidate) < 50 and
+                                    not candidate.lower() in ['theory', 'practical', 'tutorial', 'lab'] and
+                                    not candidate.startswith('-') and not candidate.isdigit() and
+                                    not candidate.replace('.', '').replace('%', '').isdigit()):
+                                    subject_full_name = candidate
+                                    break
+                        break
                 
-                # Pick best matches
-                if potential_codes:
-                    subject_code = potential_codes[0]
-                if potential_names:
-                    subject_name = potential_names[0]
-                
-                # Build display name using mappings
-                # Check both subject_name and subject_code for mappings
-                mapped_name = None
-                
-                # First try exact match on subject code
-                if subject_code and subject_code.upper() in SUBJECT_MAPPINGS:
-                    mapped_name = SUBJECT_MAPPINGS[subject_code.upper()]
-                # Then try subject name
-                elif subject_name:
-                    if subject_name.upper() in SUBJECT_MAPPINGS:
-                        mapped_name = SUBJECT_MAPPINGS[subject_name.upper()]
-                    else:
-                        # Try partial match
-                        for key, value in SUBJECT_MAPPINGS.items():
-                            if key.upper() in subject_name.upper() or subject_name.upper() in key.upper():
-                                mapped_name = value
-                                break
-                # Try matching code with partial string
-                if not mapped_name and subject_code:
-                    for key, value in SUBJECT_MAPPINGS.items():
-                        if key.upper() in subject_code.upper():
-                            mapped_name = value
+                # If no full name found, try to find ANY descriptive text that's not code/percentage/fraction
+                if subject_full_name is None:
+                    for line in lines:
+                        if (line != percentage_text and line != fraction_line and 
+                            line != lines[0] and line != subject_code and
+                            len(line) > 1 and len(line) < 50 and
+                            not line.lower() in ['theory', 'practical', 'tutorial', 'lab'] and
+                            not line.startswith('-') and not line.isdigit() and
+                            not line.replace('.', '').replace('%', '').isdigit() and
+                            not (line.isupper() and any(char.isdigit() for char in line))):
+                            subject_full_name = line
                             break
                 
-                # Check if it's a lab
-                is_lab = False
-                if subject_code or subject_name:
-                    check_text = ((subject_code or '') + (subject_name or '')).upper()
-                    if 'LAB' in check_text or '-LAB' in check_text:
-                        is_lab = True
-                
-                # Build final display name
-                if mapped_name:
-                    # If mapped name already contains 'Lab', don't add again
-                    if 'Lab' in mapped_name:
-                        display_name = mapped_name
-                    else:
-                        display_name = f"{mapped_name} Lab" if is_lab else mapped_name
-                elif subject_name and not subject_code:
-                    display_name = subject_name
-                elif subject_code and not subject_name:
-                    display_name = subject_code
-                elif subject_name and subject_code:
-                    # Both available, combine them
-                    display_name = f"{subject_name} ({subject_code})"
+                # Create final subject name - prefer full name over code
+                if subject_full_name and subject_code:
+                    # Use full name as primary, add code for reference
+                    subject_name = f"{subject_full_name} ({subject_code})"
+                elif subject_full_name:
+                    subject_name = subject_full_name
+                elif subject_code:
+                    subject_name = subject_code
                 else:
-                    # Last resort
-                    display_name = f"Subject {idx + 1}"
+                    subject_name = None
+                
+                # Use the subject_name we extracted (already has both code and full name if available)
+                if subject_name:
+                    display_name = subject_name
+                else:
+                    # Last resort - use professor name or generic
+                    if professor and professor != "Unknown":
+                        display_name = f"{professor}'s Subject"
+                    else:
+                        display_name = f"Subject {idx + 1}"
                 
                 # Debug print
-                print(f"Extracted: code={subject_code}, name={subject_name}, mapped={mapped_name}, final={display_name}")
+                print(f"Extracted: code={subject_code}, full_name={subject_full_name}, final={display_name}")
                 
                 subject_data = {
                     'Subject': display_name,
